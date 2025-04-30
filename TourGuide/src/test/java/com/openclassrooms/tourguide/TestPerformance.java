@@ -18,7 +18,7 @@ import rewardCentral.RewardCentral;
 import com.openclassrooms.tourguide.helper.InternalTestHelper;
 import com.openclassrooms.tourguide.service.RewardsService;
 import com.openclassrooms.tourguide.service.TourGuideService;
-import com.openclassrooms.tourguide.user.User;
+import com.openclassrooms.tourguide.model.User;
 
 public class TestPerformance {
 
@@ -71,7 +71,7 @@ public class TestPerformance {
 		assertTrue(TimeUnit.MINUTES.toSeconds(15) >= TimeUnit.MILLISECONDS.toSeconds(stopWatch.getTime()));
 	}
 
-	@Disabled
+	//@Disabled
 	@Test
 	public void highVolumeGetRewards() {
 		GpsUtil gpsUtil = new GpsUtil();
@@ -92,7 +92,7 @@ public class TestPerformance {
 		allUsers.forEach(u -> rewardsService.calculateRewards(u));
 
 		for (User user : allUsers) {
-			assertTrue(user.getUserRewards().size() > 0);
+			assertTrue(!user.getUserRewards().isEmpty());
 		}
 		stopWatch.stop();
 		tourGuideService.tracker.stopTracking();
