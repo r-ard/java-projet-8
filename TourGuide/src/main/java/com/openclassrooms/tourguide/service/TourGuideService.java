@@ -34,8 +34,6 @@ public class TourGuideService {
 	private final RewardsService rewardsService;
 	private final TripPricer tripPricer = new TripPricer();
 	public final Tracker tracker;
-
-	private final ExecutorService executorService = Executors.newFixedThreadPool(1000);
 	boolean testMode = true;
 
 	public TourGuideService(GpsUtil gpsUtil, RewardsService rewardsService) {
@@ -60,7 +58,7 @@ public class TourGuideService {
 
 	public VisitedLocation getUserLocation(User user) {
 		return (!user.getVisitedLocations().isEmpty()) ? user.getLastVisitedLocation()
-				: trackUserLocation(user);
+				: trackUserLocation(user, true);
 	}
 
 	public User getUser(String userName) {
@@ -86,11 +84,28 @@ public class TourGuideService {
 		return providers;
 	}
 
-	public VisitedLocation trackUserLocation(User user) {
+	public VisitedLocation trackUserLocation(User user, boolean calculateRewards) {
 		VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
 		user.addToVisitedLocations(visitedLocation);
-		rewardsService.calculateRewards(user);
+		if(calculateRewards)
+			rewardsService.calculateRewards(user);
 		return visitedLocation;
+	}
+
+	public List<VisitedLocation> trackUsersLocations(List<User> users, boolean calculateRewards) {
+		ExecutorService executorService = Executors.newFixedThreadPool(
+				Math.min(users.size(), 200)
+		);
+
+		List<CompletableFuture<VisitedLocation>> tasks = users.stream().map(user -> {
+			return CompletableFuture.supplyAsync(() -> this.trackUserLocation(user, calculateRewards), executorService);
+		}).toList();
+
+		List<VisitedLocation> outVisitedLocations = tasks.stream()
+				.map(CompletableFuture::join)
+				.toList();
+
+		return outVisitedLocations;
 	}
 
 	public List<AttractionDTO> getNearByAttractions(VisitedLocation visitedLocation, User user) {

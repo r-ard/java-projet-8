@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.openclassrooms.tourguide.model.User;
 import com.openclassrooms.tourguide.model.UserReward;
@@ -40,32 +42,49 @@ public class RewardsService {
 	}
 	
 	public void calculateRewards(User user) {
+		this.calculateUserRewards(user);
+	}
+
+	private void calculateUserRewards(User user) {
 		CopyOnWriteArrayList<VisitedLocation> userLocations = new CopyOnWriteArrayList<>(user.getVisitedLocations());
 		List<Attraction> attractions = gpsUtil.getAttractions();
 
 		CopyOnWriteArrayList<UserReward> userRewards = new CopyOnWriteArrayList<>(user.getUserRewards());
 
-		List<CompletableFuture<Void>> tasks = userLocations.stream().map(visitedLocation -> {
-			return CompletableFuture.runAsync(() -> {
-				for(Attraction attraction : attractions) {
-					if(!userRewards.stream().noneMatch(r -> r.attraction.attractionName.equals(attraction.attractionName))) continue;
+		CopyOnWriteArrayList<UserReward> newUserRewards = new CopyOnWriteArrayList<>();
 
-					if(nearAttraction(visitedLocation, attraction)) {
-						userRewards.add(
-								new UserReward(
-										visitedLocation,
-										attraction,
-										getRewardPoints(attraction, user)
-								)
-						);
-					}
+		for(VisitedLocation visitedLocation : userLocations) {
+			for(Attraction attraction : attractions) {
+				if(!userRewards.stream().noneMatch(r -> r.attraction.attractionName.equals(attraction.attractionName))) continue;
+
+				if(nearAttraction(visitedLocation, attraction)) {
+					newUserRewards.add(
+							new UserReward(
+									visitedLocation,
+									attraction,
+									getRewardPoints(attraction, user)
+							)
+					);
 				}
-			});
+			}
+		}
+
+		if(!newUserRewards.isEmpty()) {
+			for(UserReward newUserReward : newUserRewards)
+				user.addUserReward(newUserReward);
+		}
+	}
+
+	public void calculateAllRewards(List<User> users) {
+		ExecutorService executorService = Executors.newFixedThreadPool(Math.min(users.size(), 200));
+
+		List<CompletableFuture<Void>> tasks = users.stream().map(user -> {
+			return CompletableFuture.runAsync(() -> {
+				this.calculateUserRewards(user);
+			}, executorService);
 		}).toList();
 
 		CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0])).join();
-
-		user.setUserRewards(new ArrayList<>(userRewards));
 	}
 	
 	public boolean isWithinAttractionProximity(Attraction attraction, Location location) {
@@ -90,8 +109,7 @@ public class RewardsService {
                                + Math.cos(lat1) * Math.cos(lat2) * Math.cos(lon1 - lon2));
 
         double nauticalMiles = 60 * Math.toDegrees(angle);
-        double statuteMiles = STATUTE_MILES_PER_NAUTICAL_MILE * nauticalMiles;
-        return statuteMiles;
+        return STATUTE_MILES_PER_NAUTICAL_MILE * nauticalMiles;
 	}
 
 }
