@@ -34,7 +34,7 @@ jobs:
                 
             - name: Build and Test with Maven
               working-directory: TourGuide
-              run: mvn clean install
+              run: mvn clean package
                 
             - name: Upload artifact
               uses: actions/upload-artifact@v4
